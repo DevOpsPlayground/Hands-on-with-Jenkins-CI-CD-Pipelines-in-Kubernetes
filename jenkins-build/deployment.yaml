@@ -1,0 +1,68 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: jenkins
+  name: jenkins
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: jenkins
+  template:
+    metadata:
+      labels:
+        name: jenkins
+    spec:
+      containers:
+        - env:
+          image: jenkins:docker
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 2
+            httpGet:
+              path: /login
+              port: 8080
+              scheme: HTTP
+          name: jenkins
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 8080
+              scheme: HTTP
+          volumeMounts:
+            - name: jenkins-data
+              mountPath: /var/jenkins_home/
+            - name: dockersock
+              mountPath: "/var/run/docker.sock"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext:
+        runAsUser: 0
+      serviceAccount: jenkins
+      serviceAccountName: jenkins
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: jenkins-data
+          hostPath:
+            path: /jenkins-data
+            type: DirectoryOrCreate
+        - name: dockersock
+          hostPath:
+            path: /var/run/docker.sock
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+spec:
+  ports:
+    - name: web
+      nodePort: 30001
+      protocol: TCP
+      targetPort: 8080
+      port: 8080
+  selector:
+    name: jenkins
+  type: NodePort
