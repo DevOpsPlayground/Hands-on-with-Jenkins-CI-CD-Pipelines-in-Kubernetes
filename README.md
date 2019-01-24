@@ -62,7 +62,18 @@ spec:
 This configuration ideally lives on its own repository and is versioned separately.
 For simplicity it's included with in the same repository as the other resources for the scope of this playground.
 
-## List of commands used during the playground:
+### Requirements
+
+The bash script used to setup the linux server requirements.
+
+---
+# Commands
+
+#### CD repo folder
+
+```
+cd devopsplayground-27-k8s-jenkins-pipeline/
+```
 
 #### Initialize Kubernetes
 
@@ -78,6 +89,12 @@ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 
+#### Check what's running on the clustert
+```
+kubectl cluster-info
+kubectl get pods -n kube-system
+```
+
 #### Install Flannel
 
 ```
@@ -86,10 +103,14 @@ kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documen
 
 #### Find master node name and make it schedulable
 ```
-kubectl get nodes
-kubectl taint node <master-name> node-role.kubernetes.io/master:-
-```
+export K8S_MASTER=$(kubectl get nodes -o name | cut -d/ -f2)
+echo $K8S_MASTER
 
+kubectl describe node $K8S_MASTER
+
+kubectl taint node $K8S_MASTER node-role.kubernetes.io/master:-
+```
+---
 
 #### Jenkins RBAC Permissions
 ```
@@ -98,23 +119,134 @@ kubectl create -f jenkins-build/rbac.yaml
 
 #### Find Jenkins secret token
 ```
+JENKINS_TOKEN=$(kubectl get secrets $(kubectl get sa jenkins -o json|jq -r '.secrets[].name') -o json|jq -r '.data.token'|base64 -d)
+echo $JENKINS_TOKEN
+```
+
+or use the manual commands
+```
 kubectl get secrets
 kubectl describe secret <jenkins-token-xxxxxxxx>
-```
-
-Or use the full command
-
-```
-JENKINS_TOKEN=$(kubectl get secrets $(kubectl get sa jenkins -o json|jq -r '.secrets[].name') -o json|jq -r '.data.token'|base64 -d)
 ```
 
 #### Jenkins Build and deploy
 
 ```
+# Build jenkins docker image
 docker build --build-arg K8S_TOKEN=$JENKINS_TOKEN -t jenkins:docker jenkins-build/.
 
+# Deploy Jenkins
 kubectl create -f  jenkins-build/deployment.yaml
+
+# Create service
+kubectl create -f  jenkins-build/service.yaml
 ```
+
+#### Find Jenkins admin password
+
+```
+# Save Jenkins pod name in env var
+export JENKINS_POD=$(kubectl get po -l name=jenkins -o name | cut -d/ -f2)
+echo $JENKINS_POD
+
+# Get the admin password from the logs 
+kubectl logs -f $JENKINS_POD
+
+# Or from inside the container
+kubectl exec $JENKINS_POD -- cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+
+---
+
+### Jenkins configuration
+
+##### Connect to Jenkins
+
+> http://**<your_hostname_here>**.ldn.devopsplayground.com:**30001**
+
+![unlock](readme_images/jenkins-setup-wizard/1.png?raw=true "unlock")
+---
+
+![plugins](readme_images/jenkins-setup-wizard/2.png?raw=true "plugins") 
+---
+
+![admin](readme_images/jenkins-setup-wizard/3a.png?raw=true "admin") 
+
+![saveandcontinue](readme_images/jenkins-setup-wizard/3b.png?raw=true "saveandcontinue")
+--- 
+
+##### Install additional plugins
+
+```
+# Get into the jenkins pod
+kubectl exec -ti $JENKINS_POD -- bash
+
+java -jar /var/jenkins_home/war/WEB-INF/jenkins-cli.jar \
+    -auth admin:admin \
+    -s http://127.0.0.1:8080/ \
+    install-plugin copyartifact job-dsl pipeline-utility-steps
+```
+
+or from the web interface: *http://**<your_hostname_here>**:30001/**pluginManager/available***
+
+##### Disable security
+
+```
+sed -i 's/<useSecurity>true/<useSecurity>false/' /var/jenkins_home/config.xml
+```
+
+or from the web interface: *http://**<your_hostname_here>**:30001/**configureSecurity***
+
+##### Restart Jenkins
+```
+java -jar /var/jenkins_home/war/WEB-INF/jenkins-cli.jar \
+    -auth admin:admin \
+    -s http://127.0.0.1:8080/ \
+    safe-restart
+```
+
+##### Jenkins DSL Jobs Automatic Provisioning
+
+![New Item](readme_images/dsl-jobs/1.png?raw=true "New Item")
+
+---
+
+![dsl-jobs](readme_images/dsl-jobs/2.png?raw=true "dsl-jobs")
+
+---
+Repository URL: `https://github.com/ecsdigital/devopsplayground-27-k8s-jenkins-pipeline.git`
+
+![scm](readme_images/dsl-jobs/3.png?raw=true "scm")
+
+---
+
+![Build](readme_images/dsl-jobs/4.png?raw=true "Build")
+
+---
+DSL Scripts: `jenkins-jobs/dsl-jobs/**/*.groovy`
+
+![Build Dsl Jobs](readme_images/dsl-jobs/5.png?raw=true "Build Dsl Jobs")
+---
+
+![Build Now](readme_images/dsl-jobs/6.png?raw=true "Build Now")
+
+### Run the Pipeline
+
+### Interact with the Kuberntes deployments
+
+
+```
+# Find pods in test namespace
+kubectl get pods -n test
+
+# Curl the webserver
+kubectl -n test exec simple-webserver-xxx-xxx -- curl -s http://127.0.0.1:8080
+```
+
+
+
+
 
 
 

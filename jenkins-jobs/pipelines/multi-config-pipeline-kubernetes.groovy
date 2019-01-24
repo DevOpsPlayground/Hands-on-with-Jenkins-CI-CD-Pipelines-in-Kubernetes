@@ -38,13 +38,14 @@
                         deleteDir()
 
                         sh returnStatus: true, script: "kubectl --kubeconfig /etc/kubernetes/config create namespace ${environment}"
+                        // In case you need to use credentials
 //                        git branch: "master", credentialsId: "git_token", url: graph.'kubernetes-config'.repo_url
                         git branch: "master", url: graph.'kubernetes-config'.repo_url
                         sh script: "git checkout ${graph.'kubernetes-config'.revision}"
 
 
                         ["daemonset", "deployment"].each { resource_type ->
-                            current_file_path = "kubernetes/${graph.service.name}/${resource_type}.yaml"
+                            current_file_path = "kubernetes/${graph.service.name}/${environment}/${resource_type}.yaml"
 
                             if (fileExists(current_file_path)) {
 
@@ -55,9 +56,9 @@
                                 current_file = current_file.replace("IMAGE_VERSION", "${graph.service.revision}")
                                 current_file = current_file.replace("IMAGE", "${graph.service.name}")
 
-                                writeFile file: "resources.yaml", text: current_file
+                                writeFile file: "resources_${environment}.yaml", text: current_file
 
-                                sh script: "kubectl --kubeconfig /etc/kubernetes/config apply -n ${environment} -f resources.yaml"
+                                sh script: "kubectl --kubeconfig /etc/kubernetes/config apply -n ${environment} -f resources_${environment}.yaml"
                             }
                         }
                     }

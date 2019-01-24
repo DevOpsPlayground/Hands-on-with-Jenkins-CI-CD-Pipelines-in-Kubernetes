@@ -10,9 +10,9 @@ pipelineJob(cd_job_name) {
             runParam('CI_JOB', ci_job_name, "", 'SUCCESSFUL')
         }
 
-        triggers {
-            upstream(ci_job_name, 'SUCCESS')
-        }
+//        triggers {
+//            upstream(ci_job_name, 'SUCCESS')
+//        }
 
         cps {
             sandbox()
@@ -20,11 +20,11 @@ pipelineJob(cd_job_name) {
         }
     }
 
-    publishers {
-        archiveArtifacts{
-            pattern('${SERVICE_JOBNAME}_${BUILD_NUMBER}.yaml')
-            onlyIfSuccessful()
-            fingerprint()
-        }
-    }
+//    publishers {
+//        archiveArtifacts{
+//            pattern('${SERVICE_JOBNAME}_${BUILD_NUMBER}.yaml')
+//            onlyIfSuccessful()
+//            fingerprint()
+//        }
+//    }
 }
